@@ -18,7 +18,9 @@ edpm_ovn_bridge_mappings: ["datacentre:br-ex"]
 edpm_ovn_chassis_mac_first_octets: ["0e", "1e", "2e", "3e"]
 # Automatically generate the first two octets for the MAC address pefixes.
 # Pick random from first octets and then a nested iteration over a range
-# of seeds.
+# of seeds. Both octets are seeded with the bridge mapping, so the same
+# configuration always renders the same prefixes: an unseeded random choice
+# here makes every converge rewrite ovn-chassis-mac-mappings.
 # The inner loop breaks as soon as the bridge_mapping is in seen_bridges.
 edpm_ovn_chassis_mac_mapping_prefixes:
   "{%- set bridge_mappings = edpm_ovn_bridge_mappings | split(',')
@@ -30,7 +32,7 @@ edpm_ovn_chassis_mac_mapping_prefixes:
    {%- for bridge_mapping in bridge_mappings -%}
      {%- for n in range(0,255) if bridge_mapping not in seen_bridges -%}
        {%- set _seed = (bridge_mapping + n|string) -%}
-       {%- set prefix = edpm_ovn_chassis_mac_first_octets | random + ':' + '%02x' % 255 | random(seed=_seed) -%}
+       {%- set prefix = edpm_ovn_chassis_mac_first_octets | random(seed=_seed) + ':' + '%02x' % 255 | random(seed=_seed) -%}
        {%- if not prefix in seen_prefixes -%}
          {%- set seen_prefixes = seen_prefixes.append(prefix) -%}
          {%- set seen_bridges = seen_bridges.append(bridge_mapping) -%}

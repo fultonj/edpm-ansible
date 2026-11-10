@@ -142,21 +142,75 @@
         success_msg: "ovn-encap-ip is set to a valid value: {{ edpm_ovn_ovs_external_ids['ovn-encap-ip'] }}"
         fail_msg: "ovn-encap-ip must be defined and cannot be an empty string"
 
+    # Read and compare before writing: the values are owned by different
+    # components (e.g. neutron-ovn-agent appends to ovn-bridge-mappings and
+    # edpm_ovn_chassis_mac_mappings is a generated value), so an unconditional
+    # write both reports changed on every converge and rewrites a value that
+    # OVS consumers act on.
+    - name: Read current OVS external_ids
+      become: true
+      ansible.builtin.command:
+        cmd: ovs-vsctl --columns=external_ids --format=json list Open_vSwitch
+      register: ovs_external_ids_current
+      changed_when: false
+
+    - name: Parse current OVS external_ids
+      ansible.builtin.set_fact:
+        ovs_external_ids_current_map: "{{ dict((ovs_external_ids_current.stdout | from_json).data[0][0][1]) }}"
+
+    - name: Initialize the set of OVS external_ids to change
+      ansible.builtin.set_fact:
+        ovs_external_ids_changed: {}
+
+    - name: Compute OVS external_ids that differ from the current values
+      ansible.builtin.set_fact:
+        ovs_external_ids_changed: "{{ ovs_external_ids_changed | combine({item.key: item.value}) }}"
+      loop: "{{ edpm_ovn_ovs_external_ids | dict2items }}"
+      when: >-
+        (item.key not in ovs_external_ids_current_map) or
+        (ovs_external_ids_current_map[item.key] != (item.value | trim('"')))
+
     - name: Configure OVS external_ids
       become: true
       ansible.builtin.shell: >
-        ovs-vsctl set open . {% for key, value in edpm_ovn_ovs_external_ids.items() -%} external_ids:{{ key }}="{{ value }}" {% endfor %}
+        ovs-vsctl set open . {% for key, value in ovs_external_ids_changed.items() -%} external_ids:{{ key }}="{{ value }}" {% endfor %}
       register: ovs_external_ids
       changed_when: ovs_external_ids.rc == 0
       failed_when: ovs_external_ids.rc != 0
+      when: ovs_external_ids_changed | length > 0
 
 - name: Configure OVS other_config
   become: true
-  ansible.builtin.shell: >
-    ovs-vsctl set open . {% for key, value in edpm_ovn_ovs_other_config.items() %} other_config:{{ key }}={{ value }} {% endfor %}
-  register: ovs_other_config
-  changed_when: ovs_other_config.rc == 0
-  failed_when: ovs_other_config.rc != 0
+  block:
+    - name: Read current OVS other_config
+      ansible.builtin.command:
+        cmd: ovs-vsctl --columns=other_config --format=json list Open_vSwitch
+      register: ovs_other_config_current
+      changed_when: false
+
+    - name: Parse current OVS other_config
+      ansible.builtin.set_fact:
+        ovs_other_config_current_map: "{{ dict((ovs_other_config_current.stdout | from_json).data[0][0][1]) }}"
+
+    - name: Initialize the set of OVS other_config values to change
+      ansible.builtin.set_fact:
+        ovs_other_config_changed: {}
+
+    - name: Compute OVS other_config that differs from the current values
+      ansible.builtin.set_fact:
+        ovs_other_config_changed: "{{ ovs_other_config_changed | combine({item.key: item.value}) }}"
+      loop: "{{ edpm_ovn_ovs_other_config | dict2items }}"
+      when: >-
+        (item.key not in ovs_other_config_current_map) or
+        (ovs_other_config_current_map[item.key] != (item.value | string))
+
+    - name: Configure OVS other_config
+      ansible.builtin.shell: >
+        ovs-vsctl set open . {% for key, value in ovs_other_config_changed.items() %} other_config:{{ key }}={{ value }} {% endfor %}
+      register: ovs_other_config
+      changed_when: ovs_other_config.rc == 0
+      failed_when: ovs_other_config.rc != 0
+      when: ovs_other_config_changed | length > 0
   when: edpm_ovn_ovs_other_config | length > 0
 
 - name: Add OVS Manager
@@ -167,7 +221,7 @@
         set -o pipefail
         ovs-vsctl show | grep -q "Manager"
       register: ovs_manager_configured
-      changed_when: true
+      changed_when: false
       failed_when: false
 
     - name: Add OVS Manager if not exists

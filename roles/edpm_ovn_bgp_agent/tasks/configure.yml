@@ -81,7 +81,7 @@
         ovs-vsctl show | grep -q "Manager"
       register: ovs_manager_configured
       failed_when: false
-      changed_when: true
+      changed_when: false
     - name: Add OVS Manager if not exists
       ansible.builtin.shell: >
         ovs-vsctl --timeout=5 --id=@manager -- create Manager target=\"{{ edpm_ovn_bgp_agent_ovs_manager }}\" -- add Open_vSwitch . manager_options @manager

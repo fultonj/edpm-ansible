@@ -42,6 +42,10 @@
   loop: "{{ edpm_container_standalone_quadlet_defs | dict2items }}"
   loop_control:
     label: "{{ item.key }}"
+  # The staged file is rewritten right below by container_config_hash, which
+  # injects the config hash, so re-rendering it always differs from the file on
+  # disk. The copy to the final directory is what reports real changes.
+  changed_when: false
 
 - name: "Compute and inject config hashes for {{ edpm_container_standalone_service }}"
   become: true

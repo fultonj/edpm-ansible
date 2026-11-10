@@ -67,7 +67,12 @@
           }}
 
     - name: Update service with remaining containers
-      when: _edpm_updated_containers | length > 0
+      when:
+        - _edpm_updated_containers | length > 0
+        - >-
+          _edpm_updated_containers | length !=
+          (_edpm_state_data.services[_edpm_state_service_name].containers
+           | default([]) | length)
       ansible.builtin.set_fact:
         _edpm_state_data: >-
           {{
@@ -111,6 +116,25 @@
           else edpm_container_standalone_container_defs).keys() | list }}
   when: not (edpm_container_state_remove | bool)
 
+- name: Determine current containers of the service in state data
+  ansible.builtin.set_fact:
+    _edpm_state_current_containers: >-
+      {{
+        _edpm_state_data.services.get(
+          _edpm_state_service_name, {}).get('containers', [])
+      }}
+  when: not (edpm_container_state_remove | bool)
+
+- name: Compute updated containers list for the service
+  ansible.builtin.set_fact:
+    _edpm_state_new_containers: >-
+      {{
+        (_edpm_state_current_containers + _edpm_container_names)
+        if edpm_container_state_append
+        else _edpm_container_names
+      }}
+  when: not (edpm_container_state_remove | bool)
+
 - name: Update service in state data
   ansible.builtin.set_fact:
     _edpm_state_data: >-
@@ -118,13 +142,13 @@
         _edpm_state_data | combine({
           'services': _edpm_state_data.services | combine({
             _edpm_state_service_name: {
-              'containers':
-                (_edpm_state_data.services.get(
-                  _edpm_state_service_name, {}).get('containers', []) +
-                  _edpm_container_names
-                ) if edpm_container_state_append
-                else _edpm_container_names,
-              'updated_at': lookup('pipe', 'date -Iseconds')
+              'containers': _edpm_state_new_containers,
+              'updated_at':
+                lookup('pipe', 'date -Iseconds')
+                if _edpm_state_new_containers != _edpm_state_current_containers
+                else _edpm_state_data.services.get(
+                  _edpm_state_service_name, {}).get(
+                    'updated_at', lookup('pipe', 'date -Iseconds'))
             }
           }, recursive=True)
         }, recursive=True)

@@ -25,6 +25,18 @@
     owner: "{{ ansible_user | default(ansible_user_id) }}"
     group: "{{ ansible_user | default(ansible_user_id) }}"
     mode: "0755"
+
+# Ownership is enforced recursively, but the mode is deliberately not: other
+# roles give their own files and directories stricter modes (e.g. the firewall
+# snippets are 0644 in a 0750 directory), and recursing mode 0755 over them made
+# every converge rewrite those files and report a change.
+- name: Ensure /var/lib/edpm-config content has correct ownership
+  become: true
+  ansible.builtin.file:
+    path: /var/lib/edpm-config
+    state: directory
+    owner: "{{ ansible_user | default(ansible_user_id) }}"
+    group: "{{ ansible_user | default(ansible_user_id) }}"
     recurse: true
 
 # TODO(quadlet-migration): Remove the when: guard once all services are migrated.

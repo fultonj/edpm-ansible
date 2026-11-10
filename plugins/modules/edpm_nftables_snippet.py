@@ -115,8 +115,15 @@ class main():
             result['msg'] = result['error']
             module.fail_json(**result)
 
-        with open(dest, 'w') as f_output:
-            yaml.dump(parsed_yaml, f_output)
+        rendered = yaml.dump(parsed_yaml)
+        existing = None
+        if os.path.exists(dest):
+            with open(dest, 'r') as f_output:
+                existing = f_output.read()
+
+        if existing != rendered:
+            with open(dest, 'w') as f_output:
+                f_output.write(rendered)
             result['changed'] = True
     else:
         if os.path.exists(dest):

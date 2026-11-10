@@ -20,6 +20,9 @@
   register: nft_injectrules
   changed_when: nft_injectrules.rc == 0
   failed_when: nft_injectrules.rc != 0
+  # Chains only need to be (re)injected when the generated file changes; on an
+  # unchanged converge the previous converge already created them.
+  when: nft_chains is not defined or nft_chains is changed
 
 # Load all the ruleset in a single transaction.
 # This prevents accidental lock-outs.
